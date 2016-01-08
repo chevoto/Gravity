@@ -72,14 +72,21 @@ x0 <- colMeans(xx,na.rm=T)
 r <- read.table('/Users/sebastian/Documents/pointsMatrix',sep='\t')
 r$id <- seq(1:nrow(r))
 colnames(r)[1] <- 'shape'
+#convert WKT to spatial data frame
 grid <- SptlyWKTToSpatialDataFrame(r, uid='id', shape='shape',
                                 crs = "+proj=longlat +ellps=WGS84 +datum=WGS84")
+#project the points in our coordinate system
 grid <- spTransform(grid,CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+#create a buffer around each point in the grid
 grid <- gBuffer(grid,width=500,byid=T)
 
+#Empty entity to hold all results
 XX <- NULL
+#We'll do some operations for each element in the grid
 for(i in 1:length(grid)){
+  #First we intersect the i-th element in the grid with the demographic polygons
   o1 <- gIntersection(demo, grid[i,], byid=TRUE, drop_lower_td=TRUE)
+  # Then we get the areas of the intersections
   a <- gArea(o1, byid=TRUE)
   n <- unlist(lapply(names(a),function(x){strsplit(x,' ')[[1]][1]}))
   xx <- NULL
@@ -105,9 +112,16 @@ XX <- as.data.frame(XX)
 #x0 and xi (difference between observed and estimated signature)
 dX <- t(apply(XX,1,function(x){x-x0}))
 
+# lenght of the difference vector (we want small vectors)
 dX <- rowSums(abs(dX))
+# Normalized 0-1
 dX <- (dX-min(dX))/(max(dX)-min(dX))
+# Reversed so 1 means best
 dX <- max(dX)-dX
 
+# add scores of similarity and the WKT (just as a convenience to the spatial data frame)
 grid@data$similarityScore <- dX
 grid@data$coordsWKT <- r$shape
+
+#The spatial data frame can be exported using maptools 
+#or you can save grid@data as a csv and read the WKT in qgis
